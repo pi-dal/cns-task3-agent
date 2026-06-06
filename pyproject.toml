@@ -3,7 +3,7 @@ name = "cns-task3-agent"
 version = "0.1.0"
 description = "AI agent for CNS Task 3: Protein Conformational Ensemble Generation"
 requires-python = ">=3.10"
-dependencies = []
+dependencies = ["numpy>=2.2.6"]
 
 [project.scripts]
 task3-agent = "task3_agent.cli:main"

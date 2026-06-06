@@ -10,6 +10,7 @@ class DataSource:
     source_id: str
     kind: str
     uri: str
+    format: str = "pdb"  # pdb | cif
     license: str = ""
     notes: str = ""
 

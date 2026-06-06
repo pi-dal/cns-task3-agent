@@ -1,0 +1,27 @@
+{
+  "run_name": "run_20260606_044021",
+  "stages": [
+    {
+      "name": "literature",
+      "status": "done",
+      "summary": "literature stage completed (stub)."
+    },
+    {
+      "name": "data",
+      "status": "done",
+      "summary": "data stage completed (stub)."
+    },
+    {
+      "name": "baseline",
+      "status": "done",
+      "summary": "baseline stage completed (stub)."
+    }
+  ],
+  "data_sources": [
+    "pdb",
+    "uniprot",
+    "alphafold_db",
+    "pdb_dev"
+  ],
+  "conclusion": "Scaffold run completed. All stages are stubs."
+}

@@ -1,0 +1,41 @@
+#!/bin/bash
+set -euo pipefail
+
+# CNS Task 3 — container entrypoint
+# Expected layout:
+#   /saisdata/  — input dataset
+#   /app/       — agent code
+#   /saisresult/ — output directory
+
+INPUT_DIR="${INPUT_DIR:-/saisdata}"
+OUTPUT_DIR="${OUTPUT_DIR:-/saisresult}"
+RESULT_ZIP="${OUTPUT_DIR}/result.zip"
+
+echo "[run.sh] Starting CNS Task 3 agent..."
+
+# Fail-fast: check input
+if [ ! -d "$INPUT_DIR" ]; then
+    echo "[run.sh] ERROR: Input directory $INPUT_DIR not found."
+    exit 1
+fi
+echo "[run.sh] Input directory: $INPUT_DIR"
+
+# Ensure output directory
+mkdir -p "$OUTPUT_DIR"
+
+# Run agent pipeline
+cd /app
+pdm run task3-agent run --config /app/configs/data_sources.example.json --input-dir "$INPUT_DIR" --output-dir "$OUTPUT_DIR"
+
+echo "[run.sh] Packing result..."
+cd "$OUTPUT_DIR"
+zip -r "$RESULT_ZIP" . -x "*.zip" > /dev/null 2>&1
+
+if [ -f "$RESULT_ZIP" ]; then
+    echo "[run.sh] Result: $RESULT_ZIP ($(stat -f%z "$RESULT_ZIP" 2>/dev/null || stat -c%s "$RESULT_ZIP" 2>/dev/null || echo "unknown") bytes)"
+else
+    echo "[run.sh] ERROR: Failed to create $RESULT_ZIP"
+    exit 1
+fi
+
+echo "[run.sh] Done."

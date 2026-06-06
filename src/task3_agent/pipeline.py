@@ -1,5 +1,7 @@
 """Stub pipeline stages for CNS Task 3 scaffold."""
 
+import json
+import os
 from datetime import datetime, timezone
 
 from .contracts import PipelineStage, AuditEvent, RunSummary, Task3Config, DataSource
@@ -50,30 +52,47 @@ def run_pipeline(config: Task3Config) -> RunSummary:
 
 
 def _run_data_stage(log_path: str, output_dir: str, sources: list[DataSource]) -> None:
-    """Run the data acquisition + normalization stage."""
-    import os
-    import os
-    pdb_test = "configs/test_data/1ubq.pdb"
-    if not os.path.exists(pdb_test):
+    """Run the data acquisition + normalization stage.
+    
+    Reads an entry manifest (configs/entry_manifest.json) defining which
+    PDB entries to process, then acquires and normalizes each one.
+    """
+    manifest_path = "configs/entry_manifest.json"
+    if not os.path.exists(manifest_path):
         log_event(log_path, AuditEvent(
             stage="data", action="skip",
-            detail=f"Test PDB not found at {pdb_test}, skipping acquisition",
+            detail=f"No entry manifest at {manifest_path}. Define entries to process.",
         ))
         return
     
-    # Use file:// URI pointing to the directory containing the PDB
-    pdb_dir = os.path.abspath(os.path.dirname(pdb_test))
-    local_source = DataSource(
-        source_id="pdb_test",
-        kind="protein_structure",
-        uri=f"file://{pdb_dir}",
-        format="pdb",
-    )
+    with open(manifest_path, "r") as f:
+        entries = json.load(f)
     
-    pdb_path = acquire_pdb("1ubq", output_dir, local_source, log_path)
-    result = normalize_pdb(pdb_path, "1ubq", "pdb", log_path)
+    if not isinstance(entries, list):
+        log_event(log_path, AuditEvent(stage="data", action="error", detail="entry_manifest must be a list"))
+        return
+    
+    counts = {"acquired": 0, "normalized": 0, "skipped": 0, "failed": 0}
+    for entry in entries:
+        entry_id = entry.get("entry_id", "")
+        source_id = entry.get("source_id", "")
+        if not entry_id or not source_id:
+            continue
+        
+        source = next((s for s in sources if s.source_id == source_id), None)
+        if source is None:
+            log_event(log_path, AuditEvent(stage="data", action="skip", detail=f"Unknown source {source_id} for {entry_id}"))
+            continue
+        
+        try:
+            pdb_path = acquire_pdb(entry_id, output_dir, source, log_path)
+            result = normalize_pdb(pdb_path, entry_id, source.format, log_path)
+            counts["normalized"] += 1
+        except Exception as e:
+            counts["failed"] += 1
+            log_event(log_path, AuditEvent(stage="data", action="error", detail=f"Failed {entry_id}: {e}"))
     
     log_event(log_path, AuditEvent(
-        stage="data", action="complete",
-        detail=f"Acquired + normalized 1ubq: {result['sequence_length']} residues",
+        stage="data", action="summary",
+        detail=json.dumps(counts),
     ))

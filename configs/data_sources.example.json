@@ -1,30 +1,34 @@
-[
-  {
-    "source_id": "pdb",
-    "kind": "protein_structure",
-    "uri": "https://www.rcsb.org/",
-    "license": "CC0 1.0",
-    "notes": "Protein Data Bank — primary source of experimental protein structures."
-  },
-  {
-    "source_id": "uniprot",
-    "kind": "sequence_annotation",
-    "uri": "https://www.uniprot.org/",
-    "license": "CC BY 4.0",
-    "notes": "Universal Protein Resource — sequence and functional annotation."
-  },
-  {
-    "source_id": "alphafold_db",
-    "kind": "predicted_structure",
-    "uri": "https://alphafold.ebi.ac.uk/",
-    "license": "CC BY 4.0",
-    "notes": "AlphaFold Protein Structure Database — predicted structures." 
-  },
-  {
-    "source_id": "pdb_dev",
-    "kind": "conformational_ensemble",
-    "uri": "https://pdb-dev.wwpdb.org/",
-    "license": "CC0 1.0",
-    "notes": "PDB-Dev — experimental and modeled conformational ensembles."
-  }
-]
+{
+  "run_name": "example_run",
+  "output_dir": ".",
+  "sources": [
+    {
+      "source_id": "pdb",
+      "kind": "protein_structure",
+      "uri": "https://www.rcsb.org/",
+      "license": "CC0 1.0",
+      "notes": "Protein Data Bank — primary source of experimental protein structures."
+    },
+    {
+      "source_id": "uniprot",
+      "kind": "sequence_annotation",
+      "uri": "https://www.uniprot.org/",
+      "license": "CC BY 4.0",
+      "notes": "Universal Protein Resource — sequence and functional annotation."
+    },
+    {
+      "source_id": "alphafold_db",
+      "kind": "predicted_structure",
+      "uri": "https://alphafold.ebi.ac.uk/",
+      "license": "CC BY 4.0",
+      "notes": "AlphaFold Protein Structure Database — predicted structures."
+    },
+    {
+      "source_id": "pdb_dev",
+      "kind": "conformational_ensemble",
+      "uri": "https://pdb-dev.wwpdb.org/",
+      "license": "CC0 1.0",
+      "notes": "PDB-Dev — experimental and modeled conformational ensembles."
+    }
+  ]
+}

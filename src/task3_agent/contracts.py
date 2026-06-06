@@ -15,6 +15,14 @@ class DataSource:
 
 
 @dataclass
+class Task3Config:
+    """Top-level runtime config for CNS Task 3 agent."""
+    run_name: str = "default"
+    output_dir: str = "."
+    sources: list[DataSource] = field(default_factory=list)
+
+
+@dataclass
 class PipelineStage:
     """A named pipeline stage with optional result."""
     name: str

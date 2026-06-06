@@ -9,35 +9,38 @@ def main():
     parser = argparse.ArgumentParser(
         description="CNS Task 3 — Protein Conformational Ensemble Generation Agent"
     )
-    parser.add_argument(
+    sub = parser.add_subparsers(dest="command")
+    run_parser = sub.add_parser("run", help="Run the agent pipeline.")
+    run_parser.add_argument(
         "--config", "-c",
         default="",
-        help="Path to data source config JSON.",
+        help="Path to Task3Config JSON.",
     )
-    parser.add_argument(
+    run_parser.add_argument(
         "--run-name", "-n",
         default=f"run_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}",
         help="Run name (default: auto timestamp).",
     )
     args = parser.parse_args()
+    if args.command != "run":
+        parser.print_help()
+        return
 
-    from .config import resolve_config_path, load_data_sources
+    from .config import resolve_config_path, load_task3_config
     from .pipeline import run_pipeline
 
     config_path = resolve_config_path(args.config)
     print(f"[task3-agent] Using config: {config_path}")
 
-    data_sources = load_data_sources(config_path)
-    print(f"[task3-agent] Loaded {len(data_sources)} data sources")
+    cfg = load_task3_config(config_path)
+    if not cfg.run_name or cfg.run_name == "default":
+        cfg.run_name = args.run_name
+    print(f"[task3-agent] Loaded config: run_name={cfg.run_name}, {len(cfg.sources)} sources")
 
-    run_name = args.run_name
-    log_path = f"agent/log.jsonl"
-    summary_path = f"agent/run_summary.json"
-    result_dir = f"runs/{run_name}/result"
-
-    summary = run_pipeline(data_sources, run_name, log_path, summary_path, result_dir)
-    print(f"[task3-agent] Pipeline complete. Summary: {summary_path}")
-    print(f"[task3-agent] Result: {result_dir}/README.md")
+    summary = run_pipeline(cfg)
+    output_dir = cfg.output_dir
+    print(f"[task3-agent] Pipeline complete. Summary: {output_dir}/agent/run_summary.json")
+    print(f"[task3-agent] Result: {output_dir}/runs/{cfg.run_name}/result/README.md")
 
 
 if __name__ == "__main__":

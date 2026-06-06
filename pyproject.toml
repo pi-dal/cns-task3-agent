@@ -5,9 +5,6 @@ description = "AI agent for CNS Task 3: Protein Conformational Ensemble Generati
 requires-python = ">=3.10"
 dependencies = []
 
-[project.optional-dependencies]
-test = ["pytest"]
-
 [project.scripts]
 task3-agent = "task3_agent.cli:main"
 

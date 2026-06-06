@@ -6,12 +6,16 @@ import tempfile, os
 
 
 def test_pipeline_smoke():
-    config = Task3Config(
-        run_name="test-run",
-        output_dir="/tmp/test-out",
-        sources=[DataSource(source_id="test", kind="test", uri="https://example.com/")],
-    )
-    summary = run_pipeline(config)
-    assert len(summary.stages) == 3
-    assert summary.run_name == "test-run"
-    print("pipeline smoke OK")
+    with tempfile.TemporaryDirectory() as tmp:
+        config = Task3Config(
+            run_name="test-run",
+            output_dir=tmp,
+            sources=[DataSource(source_id="test", kind="test", uri="https://example.com/")],
+        )
+        summary = run_pipeline(config)
+        assert len(summary.stages) == 3
+        assert summary.run_name == "test-run"
+        assert os.path.exists(os.path.join(tmp, "agent", "log.jsonl"))
+        assert os.path.exists(os.path.join(tmp, "agent", "run_summary.json"))
+        assert os.path.exists(os.path.join(tmp, "runs", "test-run", "result", "README.md"))
+        print("pipeline smoke OK")

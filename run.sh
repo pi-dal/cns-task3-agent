@@ -4,14 +4,23 @@ set -euo pipefail
 # CNS Task 3 — container entrypoint
 # Expected layout:
 #   /saisdata/  — input dataset
-#   /app/       — agent code
+#   /app/       — agent code (container)
 #   /saisresult/ — output directory
 
 INPUT_DIR="${INPUT_DIR:-/saisdata}"
 OUTPUT_DIR="${OUTPUT_DIR:-/saisresult}"
 RESULT_ZIP="${OUTPUT_DIR}/result.zip"
 
+# Determine repo root: prefer /app (container), fallback to script dir (local dev)
+if [ -d "/app" ]; then
+    REPO_ROOT="/app"
+else
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    REPO_ROOT="$SCRIPT_DIR"
+fi
+
 echo "[run.sh] Starting CNS Task 3 agent..."
+echo "[run.sh] Repo root: $REPO_ROOT"
 
 # Fail-fast: check input
 if [ ! -d "$INPUT_DIR" ]; then
@@ -24,8 +33,8 @@ echo "[run.sh] Input directory: $INPUT_DIR"
 mkdir -p "$OUTPUT_DIR"
 
 # Run agent pipeline
-cd /app
-pdm run task3-agent run --config /app/configs/data_sources.example.json --input-dir "$INPUT_DIR" --output-dir "$OUTPUT_DIR"
+cd "$REPO_ROOT"
+pdm run task3-agent run --config "$REPO_ROOT/configs/data_sources.example.json" --input-dir "$INPUT_DIR" --output-dir "$OUTPUT_DIR"
 
 echo "[run.sh] Packing result..."
 cd "$OUTPUT_DIR"

@@ -250,6 +250,8 @@ def run_benchmark(
     pdb_dir: str = "/tmp/cns_pdb_data",
     latent_dim: int = 8,
     hidden_dim: int = 64,
+    num_layers: int = 2,
+    dropout: float = 0.0,
     num_epochs: int = 50,
     learning_rate: float = 1e-3,
     beta: float = 0.1,
@@ -311,7 +313,7 @@ def run_benchmark(
         print(f"  Val:   {[e['entry_id'] for e in val_data]}")
 
     # Create and train model
-    model = ProteinVAE(latent_dim=latent_dim, hidden_dim=hidden_dim)
+    model = ProteinVAE(latent_dim=latent_dim, hidden_dim=hidden_dim, num_layers=num_layers, dropout=dropout)
     history = train_vae(
         model, train_data, val_data,
         num_epochs=num_epochs,
@@ -371,6 +373,8 @@ def run_benchmark(
         "config": {
             "latent_dim": latent_dim,
             "hidden_dim": hidden_dim,
+            "num_layers": num_layers,
+            "dropout": dropout,
             "num_epochs": num_epochs,
             "learning_rate": learning_rate,
             "beta": beta,

@@ -12,15 +12,15 @@ from typing import Optional
 
 
 class MLPBlock(nn.Module):
-    """MLP block with BN + ReLU + optional dropout."""
+    """MLP block with LayerNorm + ReLU + optional dropout."""
     def __init__(self, in_dim: int, out_dim: int, dropout: float = 0.0):
         super().__init__()
         self.fc = nn.Linear(in_dim, out_dim)
-        self.bn = nn.BatchNorm1d(out_dim)
+        self.ln = nn.LayerNorm(out_dim)
         self.dropout = nn.Dropout(dropout) if dropout > 0 else nn.Identity()
 
     def forward(self, x):
-        return self.dropout(F.relu(self.bn(self.fc(x))))
+        return self.dropout(F.relu(self.ln(self.fc(x))))
 
 
 class PerResidueVAE(nn.Module):

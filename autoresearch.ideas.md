@@ -1,36 +1,54 @@
 # Autoresearch Ideas - Protein Conformational Ensemble Generation
 
+## Exhausted (tried, converged)
+
+### Architecture
+- ~~**Deeper network**: 3-layer model overfits on current dataset size~~ ❌
+- ~~**Dropout layers**: Dropout=0.1-0.3 hurts reconstruction, no benefit~~ ❌
+- ~~**Sinusoidal positional encoding**: Too many params for dataset, no improvement~~ ❌
+- ~~**Bigger latent/hidden**: Sweet spot at 24/192, 32/256 was worse~~ ✅
+
+### Training
+- ~~**Denoising VAE**: noise_std=0.05 works well~~ ✅
+- ~~**KL annealing**: Added but didn't help with near-zero beta~~ ❌
+- ~~**Cosine annealing**: Worse than constant LR for this dataset~~ ❌
+- ~~**AdamW with weight_decay**: Higher diversity but worse combined score~~ ❌
+- ~~**Huber loss**: Mismatch with MSE evaluation metric~~ ❌
+
+### Ensemble Generation
+- ~~**Temperature scaling (temp=2.0)**: 3x diversity boost, minimal recon loss~~ ✅
+
+### Data
+- ~~**More diverse PDB structures**: Expanded from 6 to 14 PDBs — reduced variance~~ ✅
+
 ## Promising directions not yet explored
 
 ### Architecture
-- **Deeper network**: Add more hidden layers (3-4 layers) for better capacity
-- **Dropout layers**: Add dropout (p=0.1-0.3) for regularization with near-zero KL
-- **Sinusoidal positional encoding**: Replace linear [-1,1] with sin/cos encoding
-- **Transformer encoder**: Use self-attention instead of per-residue MLP for better global context
-- **Residual connections**: Add skip connections for deeper networks
-- **LayerNorm vs BatchNorm**: Try LayerNorm for small batch sizes
+- **Transformer encoder**: Self-attention could capture non-local residue interactions
+- **LayerNorm > BatchNorm**: Better for small batch sizes, less batch dependency
+- **Residual connections**: Enable deeper networks without overfitting
 
 ### Training
-- **Denoising VAE**: Add Gaussian noise to input coordinates during training — encourages smooth latent space AND diverse ensembles
-- **Learning rate scheduling**: Cosine annealing or ReduceLROnPlateau
-- **AdamW with weight decay**: Better regularization than Adam
-- **Gradient clipping**: Prevent loss spikes
-- **Reconstruction loss scaling**: Use RMSD instead of MSE, or Huber loss for robustness
+- **Gradient clipping**: Prevent loss spikes with denoising
+- **Learning rate warmup**: Gradual LR increase helps stabilize deep VAEs
 
 ### Ensemble Generation
-- **Temperature scaling**: Multiply latent std by temperature > 1 for more diverse ensembles
-- **Truncation sampling**: Sample from truncated Normal (within 2 std) for quality-diversity tradeoff
-- **Structure-based sampling**: Use Kabsch alignment before RMSD computation for rotation-invariant evaluation
-- **Multiple ensemble sizes**: Evaluate at different n_samples (10, 50, 100)
-
-### Data
-- **More diverse PDB structures**: Add proteins with different folds (alpha, beta, alpha/beta)
-- **Data augmentation**: Random rotations, mirror transforms
-- **Multi-chain handling**: Process each chain separately
+- **Truncation sampling**: Sample within 2σ for quality-diversity tradeoff
+- **Structure-based sampling**: Kabsch alignment before RMSD
+- **Tempered ensemble**: Mix temperatures within ensemble (some cold, some hot)
 
 ### Evaluation
-- **Kabsch alignment**: Align structures before RMSD computation for proper structural comparison
-- **Per-residue RMSD**: Evaluate per-residue errors instead of global
-- **TM-score**: Add TM-score metric for structural similarity
-- **Clash score**: Evaluate physical plausibility of generated conformations
-- **Ramachandran analysis**: Check backbone dihedral angle distributions
+- **Kabsch alignment**: Rotation-invariant RMSD comparison
+- **Per-residue RMSD**: Residue-level error analysis
+- **Physical plausibility**: Clash score, Ramachandran analysis
+- **TM-score**: Structure similarity metric
+
+### Data
+- **Multi-chain handling**: Process each chain separately
+- **Data augmentation**: Random rotations during training
+- **CATH/SCOP fold classification**: Ensure fold-level train/test split
+
+### Integration with CNS Task3
+- **Auto-download PDBs**: Autonomous data acquisition from RCSB
+- **Literature stage**: Auto-research BioEmu, STARLING, EPO papers
+- **Agent decision log**: Record why each architecture/model choice was made

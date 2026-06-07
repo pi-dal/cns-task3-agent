@@ -248,6 +248,7 @@ def run_benchmark(
     beta_anneal_epochs: int = 0,
     noise_std: float = 0.0,
     ensemble_samples: int = 20,
+    ensemble_temp: float = 1.0,
     diversity_weight: float = 0.001,
     device: str = "cpu",
     verbose: bool = False,
@@ -334,7 +335,7 @@ def run_benchmark(
             val_recon_mse += F.mse_loss(recon_raw, raw_coords.to(device)).item()
 
             # Ensemble diversity (in original space)
-            ensemble_norm = model.generate_ensemble(norm_coords, n_samples=ensemble_samples)
+            ensemble_norm = model.generate_ensemble(norm_coords, n_samples=ensemble_samples, temp=ensemble_temp)
             ensemble_raw = ensemble_norm * scale + center
             val_diversity += pairwise_rmsd(ensemble_raw)
 
@@ -368,6 +369,7 @@ def run_benchmark(
             "beta_anneal_epochs": beta_anneal_epochs,
             "noise_std": noise_std,
             "ensemble_samples": ensemble_samples,
+            "ensemble_temp": ensemble_temp,
             "diversity_weight": diversity_weight,
         },
     }

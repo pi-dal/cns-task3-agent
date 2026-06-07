@@ -116,12 +116,13 @@ class PerResidueVAE(nn.Module):
         return recon, total_loss, kl_mean
 
     @torch.no_grad()
-    def generate_ensemble(self, coords: torch.Tensor, n_samples: int = 20) -> torch.Tensor:
+    def generate_ensemble(self, coords: torch.Tensor, n_samples: int = 20, temp: float = 1.0) -> torch.Tensor:
         """Generate an ensemble of conformations by repeated latent sampling.
 
         Args:
             coords: (N, 3) input CA coordinates.
-            n_samples: Number of ensemble members to generate.
+            n_samples: Number of ensemble members.
+            temp: Temperature scaling of latent std (higher = more diverse).
 
         Returns:
             ensemble: (n_samples, N, 3) generated conformations.
@@ -129,7 +130,9 @@ class PerResidueVAE(nn.Module):
         mu, logvar = self.encode(coords)
         samples = []
         for _ in range(n_samples):
-            z = self.reparameterize(mu, logvar)
+            std = torch.exp(0.5 * logvar) * temp
+            eps = torch.randn_like(std)
+            z = mu + eps * std
             sample = self.decode(z, coords.shape[0])
             samples.append(sample.unsqueeze(0))
         return torch.cat(samples, dim=0)

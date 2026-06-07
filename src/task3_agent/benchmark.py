@@ -232,10 +232,18 @@ BENCHMARK_PDBS = [
     "1crn",  # Crambin (46 residues)
     "1bba",  # BBA fold (36 residues)
     "4ins",  # Insulin (102 residues)
+    "1hoe",  # Engrailed homeodomain (74 residues)
+    "2gb1",  # B1 domain of protein G (56 residues)
+    "3u7y",  # Heat shock protein (768 residues)
+    "4m3e",  # Engineered beta-lactamase (193 residues)
+    "1pko",  # Protein kinase (123 residues)
+    "1a6m",  # DNA-binding protein (151 residues)
+    "2bh8",  # Beta-sandwich (171 residues)
+    "2hdm",  # Designed ankyrin repeat (74 residues)
 ]
 
-# Held-out proteins for validation
-VAL_ENTRIES = {"1crn", "1bba"}
+# Held-out proteins for validation (diverse, unseen folds)
+VAL_ENTRIES = {"1crn", "1bba", "1hoe", "2gb1"}
 
 
 def run_benchmark(

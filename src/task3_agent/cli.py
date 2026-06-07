@@ -50,9 +50,10 @@ def main():
 
     cfg = load_task3_config(config_path)
     cfg.output_dir = output_dir
+    cfg.input_dir = input_dir
     if not cfg.run_name or cfg.run_name == "default":
         cfg.run_name = args.run_name
-    print(f"[task3-agent] Loaded config: run_name={cfg.run_name}, {len(cfg.sources)} sources")
+    print(f"[task3-agent] Loaded config: run_name={cfg.run_name}, input_dir={input_dir}, {len(cfg.sources)} sources")
 
     summary = run_pipeline(cfg)
     print(f"[task3-agent] Pipeline complete. Summary: {output_dir}/agent/run_summary.json")

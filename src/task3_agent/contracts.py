@@ -20,6 +20,7 @@ class Task3Config:
     """Top-level runtime config for CNS Task 3 agent."""
     run_name: str = "default"
     output_dir: str = "."
+    input_dir: str = ""
     sources: list[DataSource] = field(default_factory=list)
 
 

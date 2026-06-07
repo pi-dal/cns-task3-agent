@@ -11,23 +11,32 @@ import torch.nn.functional as F
 from typing import Optional
 
 
+class MLPBlock(nn.Module):
+    """MLP block with BN + ReLU + optional dropout."""
+    def __init__(self, in_dim: int, out_dim: int, dropout: float = 0.0):
+        super().__init__()
+        self.fc = nn.Linear(in_dim, out_dim)
+        self.bn = nn.BatchNorm1d(out_dim)
+        self.dropout = nn.Dropout(dropout) if dropout > 0 else nn.Identity()
+
+    def forward(self, x):
+        return self.dropout(F.relu(self.bn(self.fc(x))))
+
+
 class PerResidueVAE(nn.Module):
     """Per-residue VAE for protein backbone ensemble generation.
 
     Each CA coordinate is encoded independently into a latent distribution.
     The decoder reconstructs from sampled latent + positional encoding.
 
-    This architecture:
-    - Shares parameters across all residues (weight tying)
-    - Learns local backbone geometry patterns (generalizes across proteins)
-    - Generates diverse ensembles via per-residue latent sampling
-
     Args:
         latent_dim: Dimensionality of per-residue latent space.
         hidden_dim: Hidden layer width.
+        num_layers: Number of MLP layers (2-4).
+        dropout: Dropout probability (0 = no dropout).
     """
 
-    def __init__(self, latent_dim: int = 8, hidden_dim: int = 64):
+    def __init__(self, latent_dim: int = 16, hidden_dim: int = 128, num_layers: int = 2, dropout: float = 0.0):
         super().__init__()
         self.latent_dim = latent_dim
         self.hidden_dim = hidden_dim
@@ -35,32 +44,32 @@ class PerResidueVAE(nn.Module):
         # --- Encoder: (x,y,z) → μ, logvar ---
         self.enc_fc1 = nn.Linear(3, hidden_dim)
         self.enc_bn1 = nn.BatchNorm1d(hidden_dim)
-        self.enc_fc2 = nn.Linear(hidden_dim, hidden_dim)
-        self.enc_bn2 = nn.BatchNorm1d(hidden_dim)
+        self.num_layers = num_layers
+
+        # --- Encoder: (x,y,z) → μ, logvar ---
+        enc_layers = []
+        in_dim = 3
+        for i in range(num_layers):
+            enc_layers.append(MLPBlock(in_dim, hidden_dim, dropout))
+            in_dim = hidden_dim
+        self.encoder = nn.Sequential(*enc_layers)
         self.enc_mu = nn.Linear(hidden_dim, latent_dim)
         self.enc_logvar = nn.Linear(hidden_dim, latent_dim)
 
         # --- Decoder: z + position encoding → (x,y,z) ---
-        self.dec_fc1 = nn.Linear(latent_dim + 1, hidden_dim)
-        self.dec_bn1 = nn.BatchNorm1d(hidden_dim)
-        self.dec_fc2 = nn.Linear(hidden_dim, hidden_dim)
-        self.dec_bn2 = nn.BatchNorm1d(hidden_dim)
+        dec_layers = []
+        in_dim = latent_dim + 1
+        for i in range(num_layers):
+            dec_layers.append(MLPBlock(in_dim, hidden_dim, dropout))
+            in_dim = hidden_dim
+        self.decoder = nn.Sequential(*dec_layers)
         self.dec_out = nn.Linear(hidden_dim, 3)
 
     def encode(self, coords: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        """Encode each CA coordinate into a latent distribution.
-
-        Args:
-            coords: (N, 3) tensor of CA coordinates.
-
-        Returns:
-            mu: (N, latent_dim) per-residue means.
-            logvar: (N, latent_dim) per-residue log variances.
-        """
-        h = F.relu(self.enc_bn1(self.enc_fc1(coords)))   # (N, hidden)
-        h = F.relu(self.enc_bn2(self.enc_fc2(h)))         # (N, hidden)
-        mu = self.enc_mu(h)                                # (N, latent)
-        logvar = self.enc_logvar(h)                        # (N, latent)
+        """Encode each CA coordinate into a latent distribution."""
+        h = self.encoder(coords)                             # (N, hidden)
+        mu = self.enc_mu(h)                                   # (N, latent)
+        logvar = self.enc_logvar(h)                           # (N, latent)
         return mu, logvar
 
     def reparameterize(self, mu: torch.Tensor, logvar: torch.Tensor) -> torch.Tensor:
@@ -70,21 +79,10 @@ class PerResidueVAE(nn.Module):
         return mu + eps * std
 
     def decode(self, z: torch.Tensor, n_residues: int) -> torch.Tensor:
-        """Decode latents + position encoding to coordinates.
-
-        Args:
-            z: (N, latent_dim) per-residue latents.
-            n_residues: Number of residues (may differ from z.shape[0] for
-                        generation on different-length protein).
-
-        Returns:
-            coords: (N, 3) decoded CA coordinates.
-        """
+        """Decode latents + position encoding to coordinates."""
         pos = torch.linspace(-1.0, 1.0, n_residues, device=z.device).unsqueeze(-1)  # (N, 1)
-        # If z has different N than n_residues, we broadcast
         dec_in = torch.cat([z, pos], dim=-1)  # (N, latent+1)
-        h = F.relu(self.dec_bn1(self.dec_fc1(dec_in)))
-        h = F.relu(self.dec_bn2(self.dec_fc2(h)))
+        h = self.decoder(dec_in)
         out = self.dec_out(h)  # (N, 3)
         return out
 
@@ -142,4 +140,5 @@ class PerResidueVAE(nn.Module):
             "model_type": "PerResidueVAE",
             "latent_dim": self.latent_dim,
             "hidden_dim": self.hidden_dim,
+            "num_layers": self.num_layers,
         }

@@ -20,6 +20,7 @@ from torch import nn, optim
 from torch.utils.data import Dataset, DataLoader
 
 from .models import PerResidueVAE as ProteinVAE
+from .models import TransformerVAE
 
 
 # ---------------------------------------------------------------------------
@@ -260,6 +261,9 @@ def run_benchmark(
     ensemble_samples: int = 20,
     ensemble_temp: float = 1.0,
     diversity_weight: float = 0.001,
+    model_type: str = "mlp",
+    nhead: int = 4,
+    num_transformer_layers: int = 1,
     device: str = "cpu",
     verbose: bool = False,
 ) -> dict:

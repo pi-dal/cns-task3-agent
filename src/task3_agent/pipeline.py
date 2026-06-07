@@ -1,4 +1,4 @@
-"""Stub pipeline stages for CNS Task 3 scaffold."""
+"""Full CNS Task 3 pipeline with PerResidueVAE ensemble generation."""
 
 import json
 import os
@@ -7,22 +7,39 @@ from datetime import datetime, timezone
 from .contracts import PipelineStage, AuditEvent, RunSummary, Task3Config, DataSource
 from .audit import log_event, write_run_summary, write_run_readme
 from .data import acquire_pdb, normalize_pdb
-from .train import load_normalized_inputs, train_baseline
+from .train import train_vae
+
+
+# Best config from autoresearch
+BEST_CONFIG = {
+    "latent_dim": 24,
+    "hidden_dim": 192,
+    "num_epochs": 6000,
+    "learning_rate": 5e-4,
+    "beta": 0.001,
+    "noise_std": 0.05,
+    "ensemble_temp": 2.0,
+    "ensemble_samples": 20,
+}
 
 
 def run_pipeline(config: Task3Config) -> RunSummary:
-    """Run the three-stage stub pipeline."""
+    """Run the three-stage CNS Task 3 pipeline."""
     run_name = config.run_name
     output_dir = config.output_dir
     log_path = f"{output_dir}/agent/log.jsonl"
     summary_path = f"{output_dir}/agent/run_summary.json"
     result_dir = f"{output_dir}/runs/{run_name}/result"
+    artifact_dir = f"{output_dir}/runs/{run_name}/artifacts/checkpoints"
 
     stages = [
         PipelineStage(name="literature", status="running"),
         PipelineStage(name="data", status="running"),
         PipelineStage(name="baseline", status="pending"),
+        PipelineStage(name="ensemble", status="pending"),
     ]
+
+    entry_dirs = []
 
     for stage in stages:
         log_event(log_path, AuditEvent(
@@ -30,10 +47,14 @@ def run_pipeline(config: Task3Config) -> RunSummary:
             action="start",
             detail=f"Starting {stage.name} stage.",
         ))
+
         if stage.name == "data":
-            _run_data_stage(log_path, output_dir, config.sources)
+            entry_dirs = _run_data_stage(log_path, output_dir, config.sources, config.run_name)
         elif stage.name == "baseline":
-            _run_baseline_stage(log_path, output_dir, config, run_name)
+            _run_baseline_stage(log_path, entry_dirs, config, run_name, artifact_dir)
+        elif stage.name == "ensemble":
+            _run_ensemble_stage(log_path, entry_dirs, result_dir, artifact_dir)
+
         stage.status = "done"
         stage.summary = f"{stage.name} stage completed."
         log_event(log_path, AuditEvent(
@@ -46,89 +67,110 @@ def run_pipeline(config: Task3Config) -> RunSummary:
         run_name=run_name,
         stages=stages,
         data_sources=[s.source_id for s in config.sources],
-        conclusion="Pipeline run completed.",
+        conclusion="Pipeline run completed — PerResidueVAE ensemble generated.",
     )
 
     write_run_summary(summary_path, summary)
-    write_run_readme(result_dir, summary)
     return summary
 
 
-def _run_data_stage(log_path: str, output_dir: str, sources: list[DataSource]) -> None:
-    """Run the data acquisition + normalization stage.
-    
-    Reads an entry manifest (configs/entry_manifest.json) defining which
-    PDB entries to process, then acquires and normalizes each one.
-    """
+def _run_data_stage(log_path: str, output_dir: str, sources: list[DataSource], run_name: str) -> list[str]:
+    """Download and normalize PDB structures."""
     manifest_path = "configs/entry_manifest.json"
     if not os.path.exists(manifest_path):
-        log_event(log_path, AuditEvent(
-            stage="data", action="skip",
-            detail=f"No entry manifest at {manifest_path}. Define entries to process.",
-        ))
-        return
-    
-    with open(manifest_path, "r") as f:
+        log_event(log_path, AuditEvent(stage="data", action="skip", detail=f"No manifest at {manifest_path}"))
+        return []
+
+    with open(manifest_path) as f:
         entries = json.load(f)
-    
-    if not isinstance(entries, list):
-        log_event(log_path, AuditEvent(stage="data", action="error", detail="entry_manifest must be a list"))
-        return
-    
-    counts = {"acquired": 0, "normalized": 0, "skipped": 0, "failed": 0}
+
+    entry_dirs = []
     for entry in entries:
         entry_id = entry.get("entry_id", "")
         source_id = entry.get("source_id", "")
         if not entry_id or not source_id:
             continue
-        
+
         source = next((s for s in sources if s.source_id == source_id), None)
         if source is None:
-            log_event(log_path, AuditEvent(stage="data", action="skip", detail=f"Unknown source {source_id} for {entry_id}"))
             continue
-        
+
         try:
             pdb_path = acquire_pdb(entry_id, output_dir, source, log_path)
-            result = normalize_pdb(pdb_path, entry_id, source.format, log_path)
-            counts["normalized"] += 1
+            normalize_pdb(pdb_path, entry_id, source.format, log_path)
+            entry_dir = os.path.join(output_dir, source_id, entry_id)
+            entry_dirs.append(entry_dir)
+            log_event(log_path, AuditEvent(stage="data", action="ok", detail=f"Processed {entry_id}"))
         except Exception as e:
-            counts["failed"] += 1
             log_event(log_path, AuditEvent(stage="data", action="error", detail=f"Failed {entry_id}: {e}"))
-    
+
+    log_event(log_path, AuditEvent(stage="data", action="summary", detail=f"Processed {len(entry_dirs)} entries"))
+    return entry_dirs
+
+
+def _run_baseline_stage(log_path: str, entry_dirs: list[str], config: Task3Config,
+                        run_name: str, artifact_dir: str) -> None:
+    """Train PerResidueVAE with best config."""  
+    if not entry_dirs:
+        log_event(log_path, AuditEvent(stage="baseline", action="skip", detail="No data available"))
+        return
+
+    metadata = train_vae(
+        entry_dirs=entry_dirs,
+        checkpoint_dir=artifact_dir,
+        run_name=run_name,
+        **BEST_CONFIG,
+    )
+
     log_event(log_path, AuditEvent(
-        stage="data", action="summary",
-        detail=json.dumps(counts),
+        stage="baseline", action="complete",
+        detail=f"VAE trained: {metadata['num_samples']} samples, loss={metadata['final_loss']:.6f}",
     ))
 
 
-def _run_baseline_stage(log_path: str, output_dir: str, config: Task3Config, run_name: str) -> None:
-    """Run the baseline training stage.
+def _run_ensemble_stage(log_path: str, entry_dirs: list[str], result_dir: str, artifact_dir: str) -> None:
+    """Generate conformational ensemble README with results summary."""
+    import torch
     
-    Loads normalized.pt from the data stage output and trains a minimal MLP.
-    """
-    from pathlib import Path
-    
-    # Collect entry directories from data stage output
-    entry_dirs = []
-    for source in config.sources:
-        src_output = os.path.join(output_dir, source.source_id)
-        if not os.path.exists(src_output):
-            continue
-        for entry_id in os.listdir(src_output):
-            npt_path = os.path.join(src_output, entry_id, "normalized.pt")
-            if os.path.exists(npt_path):
-                entry_dirs.append(os.path.dirname(npt_path))
-    
-    if not entry_dirs:
-        log_event(log_path, AuditEvent(stage="baseline", action="skip", detail="No normalized artifacts found"))
+    # Load metadata
+    meta_path = os.path.join(artifact_dir, "metadata.json")
+    if not os.path.exists(meta_path):
+        log_event(log_path, AuditEvent(stage="ensemble", action="skip", detail="No metadata found"))
         return
-    
-    input_data = load_normalized_inputs(entry_dirs)
-    artifact_dir = os.path.join(output_dir, "runs", run_name, "artifacts", "checkpoints")
-    
-    metadata = train_baseline(input_data, artifact_dir, run_name=run_name)
-    
+
+    with open(meta_path) as f:
+        metadata = json.load(f)
+
+    # Write enhanced result README
+    readme_path = os.path.join(result_dir, "README.md")
+    lines = [
+        f"# CNS Task 3 — Protein Conformational Ensemble",
+        f"",
+        f"**Run**: {metadata['run_name']}",
+        f"**Model**: PerResidueVAE (latent={metadata['model_config']['latent_dim']}, hidden={metadata['model_config']['hidden_dim']})",
+        f"**Training**: {metadata['num_epochs']} epochs, final loss={metadata['final_loss']:.6f}",
+        f"**Ensemble**: {metadata['ensemble_config']['n_samples']} samples per protein, temp={metadata['ensemble_config']['temp']}",
+        f"**Created**: {metadata['created_at']}",
+        f"",
+        f"## Input Proteins",
+        f"",
+    ]
+    for eid in metadata['input_entries']:
+        lines.append(f"- {eid}")
+    lines.append("")
+    lines.append("## Generated Ensembles")
+    lines.append("")
+    lines.append("| Entry | Residues | Pairwise RMSD (Å) |")
+    lines.append("|-------|----------|-------------------|")
+    for info in metadata['ensembles']:
+        lines.append(f"| {info['entry_id']} | {info['n_residues']} | {info['ensemble_pairwise_rmsd']:.3f} |")
+    lines.append("")
+
+    os.makedirs(result_dir, exist_ok=True)
+    with open(readme_path, "w") as f:
+        f.write("\n".join(lines) + "\n")
+
     log_event(log_path, AuditEvent(
-        stage="baseline", action="complete",
-        detail=f"Baseline trained: {metadata['num_samples']} samples, loss={metadata['final_loss']:.4f}",
+        stage="ensemble", action="complete",
+        detail=f"Ensemble results written: {readme_path}",
     ))

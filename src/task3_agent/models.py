@@ -11,6 +11,122 @@ import torch.nn.functional as F
 from typing import Optional
 
 
+def _sinusoidal_pos(n_residues: int, dim: int = 32, device: torch.device = None) -> torch.Tensor:
+    """Sinusoidal positional encoding for Transformer."""
+    pos = torch.linspace(0.0, 1.0, n_residues, device=device).unsqueeze(-1)
+    freqs = 10000.0 ** (torch.arange(0, dim, 2, device=device).float() / dim)
+    angles = pos * freqs.unsqueeze(0)
+    pe = torch.zeros(n_residues, dim, device=device)
+    pe[:, 0::2] = torch.sin(angles)
+    pe[:, 1::2] = torch.cos(angles)
+    return pe
+
+
+class TransformerVAE(nn.Module):
+    """VAE with Transformer encoder for residue-residue interaction modeling.
+
+    Encodes (N, 3) CA coordinates through a Transformer encoder with
+    self-attention to capture non-local residue interactions.
+    Decoder is the same per-residue MLP as PerResidueVAE.
+    """
+
+    def __init__(self, latent_dim: int = 24, hidden_dim: int = 192,
+                 num_layers: int = 2, dropout: float = 0.0,
+                 nhead: int = 4, num_transformer_layers: int = 1):
+        super().__init__()
+        self.latent_dim = latent_dim
+        self.hidden_dim = hidden_dim
+        self.num_layers = num_layers
+        self.pe_dim = 32
+
+        # Input projection: (x,y,z) -> hidden_dim
+        self.input_proj = nn.Sequential(
+            nn.Linear(3, hidden_dim),
+            nn.LayerNorm(hidden_dim),
+            nn.ReLU(),
+        )
+
+        # Transformer encoder
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=hidden_dim,
+            nhead=nhead,
+            dim_feedforward=hidden_dim * 2,
+            dropout=dropout,
+            activation='relu',
+            batch_first=True,
+            norm_first=True,
+        )
+        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=num_transformer_layers)
+
+        # Output: hidden_dim -> mu, logvar
+        self.enc_mu = nn.Linear(hidden_dim, latent_dim)
+        self.enc_logvar = nn.Linear(hidden_dim, latent_dim)
+
+        # --- Decoder: same as PerResidueVAE ---
+        dec_layers = []
+        in_dim = latent_dim + 1  # z + position
+        for i in range(num_layers):
+            dec_layers.append(MLPBlock(in_dim, hidden_dim, dropout))
+            in_dim = hidden_dim
+        self.decoder = nn.Sequential(*dec_layers)
+        self.dec_out = nn.Linear(hidden_dim, 3)
+
+    def encode(self, coords: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """Encode through Transformer with self-attention."""
+        N = coords.shape[0]
+        h = self.input_proj(coords).unsqueeze(0)  # (1, N, hidden)
+        pe = _sinusoidal_pos(N, self.pe_dim, coords.device).unsqueeze(0)  # (1, N, 32)
+        h = h + pe  # Add positional encoding
+        h = self.transformer(h).squeeze(0)  # (N, hidden)
+        mu = self.enc_mu(h)
+        logvar = self.enc_logvar(h)
+        return mu, logvar
+
+    def reparameterize(self, mu: torch.Tensor, logvar: torch.Tensor) -> torch.Tensor:
+        std = torch.exp(0.5 * logvar)
+        eps = torch.randn_like(std)
+        return mu + eps * std
+
+    def decode(self, z: torch.Tensor, n_residues: int) -> torch.Tensor:
+        """Decode latents + position encoding to coordinates."""
+        pos = torch.linspace(-1.0, 1.0, n_residues, device=z.device).unsqueeze(-1)
+        dec_in = torch.cat([z, pos], dim=-1)
+        h = self.decoder(dec_in)
+        out = self.dec_out(h)
+        return out
+
+    def forward(self, coords: torch.Tensor, beta: float = 1.0) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        N = coords.shape[0]
+        mu, logvar = self.encode(coords)
+        z = self.reparameterize(mu, logvar)
+        recon = self.decode(z, N)
+        recon_loss = F.mse_loss(recon, coords)
+        kl_per_res = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1)
+        kl_mean = kl_per_res.mean()
+        total_loss = recon_loss + beta * kl_mean
+        return recon, total_loss, kl_mean
+
+    @torch.no_grad()
+    def generate_ensemble(self, coords: torch.Tensor, n_samples: int = 20, temp: float = 1.0) -> torch.Tensor:
+        mu, logvar = self.encode(coords)
+        samples = []
+        for _ in range(n_samples):
+            std = torch.exp(0.5 * logvar) * temp
+            eps = torch.randn_like(std)
+            z = mu + eps * std
+            sample = self.decode(z, coords.shape[0])
+            samples.append(sample.unsqueeze(0))
+        return torch.cat(samples, dim=0)
+
+    def get_config(self) -> dict:
+        return {
+            "model_type": "TransformerVAE",
+            "latent_dim": self.latent_dim,
+            "hidden_dim": self.hidden_dim,
+            "num_layers": self.num_layers,
+        }
+
+
 class MLPBlock(nn.Module):
     """MLP block with LayerNorm + ReLU + optional dropout."""
     def __init__(self, in_dim: int, out_dim: int, dropout: float = 0.0):

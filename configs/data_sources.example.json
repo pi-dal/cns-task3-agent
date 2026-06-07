@@ -1,5 +1,5 @@
 {
-  "run_name": "example_run",
+  "run_name": "default",
   "output_dir": ".",
   "sources": [
     {

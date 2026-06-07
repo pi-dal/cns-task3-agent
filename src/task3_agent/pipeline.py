@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from .contracts import PipelineStage, AuditEvent, RunSummary, Task3Config, DataSource
 from .audit import log_event, write_run_summary, write_run_readme
 from .data import acquire_pdb, normalize_pdb
+from .train import load_normalized_inputs, train_baseline
 
 
 def run_pipeline(config: Task3Config) -> RunSummary:
@@ -31,6 +32,8 @@ def run_pipeline(config: Task3Config) -> RunSummary:
         ))
         if stage.name == "data":
             _run_data_stage(log_path, output_dir, config.sources)
+        elif stage.name == "baseline":
+            _run_baseline_stage(log_path, output_dir, config, run_name)
         stage.status = "done"
         stage.summary = f"{stage.name} stage completed."
         log_event(log_path, AuditEvent(
@@ -95,4 +98,37 @@ def _run_data_stage(log_path: str, output_dir: str, sources: list[DataSource]) -
     log_event(log_path, AuditEvent(
         stage="data", action="summary",
         detail=json.dumps(counts),
+    ))
+
+
+def _run_baseline_stage(log_path: str, output_dir: str, config: Task3Config, run_name: str) -> None:
+    """Run the baseline training stage.
+    
+    Loads normalized.pt from the data stage output and trains a minimal MLP.
+    """
+    from pathlib import Path
+    
+    # Collect entry directories from data stage output
+    entry_dirs = []
+    for source in config.sources:
+        src_output = os.path.join(output_dir, source.source_id)
+        if not os.path.exists(src_output):
+            continue
+        for entry_id in os.listdir(src_output):
+            npt_path = os.path.join(src_output, entry_id, "normalized.pt")
+            if os.path.exists(npt_path):
+                entry_dirs.append(os.path.dirname(npt_path))
+    
+    if not entry_dirs:
+        log_event(log_path, AuditEvent(stage="baseline", action="skip", detail="No normalized artifacts found"))
+        return
+    
+    input_data = load_normalized_inputs(entry_dirs)
+    artifact_dir = os.path.join(output_dir, "runs", run_name, "artifacts", "checkpoints")
+    
+    metadata = train_baseline(input_data, artifact_dir)
+    
+    log_event(log_path, AuditEvent(
+        stage="baseline", action="complete",
+        detail=f"Baseline trained: {metadata['num_samples']} samples, loss={metadata['final_loss']:.4f}",
     ))

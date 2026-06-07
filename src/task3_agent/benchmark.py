@@ -147,6 +147,8 @@ def train_vae(
     num_epochs: int = 100,
     learning_rate: float = 1e-3,
     beta: float = 1.0,
+    beta_anneal_epochs: int = 0,
+    noise_std: float = 0.0,
     device: str = "cpu",
     verbose: bool = False,
 ) -> dict:
@@ -159,6 +161,8 @@ def train_vae(
         num_epochs: training epochs.
         learning_rate: Adam learning rate.
         beta: KL weight.
+        beta_anneal_epochs: If >0, linearly anneal beta from 0 to beta.
+        noise_std: Gaussian noise std for denoising VAE (0 = disabled).
         device: "cpu" or "cuda".
         verbose: print progress.
 
@@ -167,14 +171,24 @@ def train_vae(
     """
     model = model.to(device)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-    history = {"train_loss": [], "val_loss": [], "val_recon": [], "val_kl": []}
+    history = {"train_loss": [], "val_loss": [], "val_recon": [], "val_kl": [], "beta_used": []}
 
     for epoch in range(num_epochs):
+        # KL annealing
+        if beta_anneal_epochs > 0 and epoch < beta_anneal_epochs:
+            current_beta = beta * (epoch + 1) / beta_anneal_epochs
+        else:
+            current_beta = beta
+
         model.train()
         epoch_loss = 0.0
         for entry in train_data:
             coords = entry["coords"].to(device)
-            _, loss, _ = model(coords, beta=beta)
+            if noise_std > 0:
+                noisy = coords + torch.randn_like(coords) * noise_std
+                _, loss, _ = model(noisy, beta=current_beta)
+            else:
+                _, loss, _ = model(coords, beta=current_beta)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -189,7 +203,7 @@ def train_vae(
         with torch.no_grad():
             for entry in val_data:
                 coords = entry["coords"].to(device)
-                recon, total_loss, kl = model(coords, beta=beta)
+                recon, total_loss, kl = model(coords, beta=current_beta)
                 recon_mse = F.mse_loss(recon, coords).item()
                 val_loss += total_loss.item()
                 val_recon += recon_mse
@@ -198,6 +212,7 @@ def train_vae(
         history["train_loss"].append(avg_train_loss)
         history["val_loss"].append(val_loss / n_val)
         history["val_recon"].append(val_recon / n_val)
+        history["beta_used"].append(current_beta)
         history["val_kl"].append(val_kl / n_val)
 
         if verbose and (epoch + 1) % 20 == 0:
@@ -230,6 +245,8 @@ def run_benchmark(
     num_epochs: int = 50,
     learning_rate: float = 1e-3,
     beta: float = 0.1,
+    beta_anneal_epochs: int = 0,
+    noise_std: float = 0.0,
     ensemble_samples: int = 20,
     diversity_weight: float = 0.001,
     device: str = "cpu",
@@ -291,6 +308,8 @@ def run_benchmark(
         num_epochs=num_epochs,
         learning_rate=learning_rate,
         beta=beta,
+        beta_anneal_epochs=beta_anneal_epochs,
+        noise_std=noise_std,
         device=device,
         verbose=verbose,
     )
@@ -346,6 +365,8 @@ def run_benchmark(
             "num_epochs": num_epochs,
             "learning_rate": learning_rate,
             "beta": beta,
+            "beta_anneal_epochs": beta_anneal_epochs,
+            "noise_std": noise_std,
             "ensemble_samples": ensemble_samples,
             "diversity_weight": diversity_weight,
         },

@@ -126,7 +126,7 @@ def _run_baseline_stage(log_path: str, output_dir: str, config: Task3Config, run
     input_data = load_normalized_inputs(entry_dirs)
     artifact_dir = os.path.join(output_dir, "runs", run_name, "artifacts", "checkpoints")
     
-    metadata = train_baseline(input_data, artifact_dir)
+    metadata = train_baseline(input_data, artifact_dir, run_name=run_name)
     
     log_event(log_path, AuditEvent(
         stage="baseline", action="complete",

@@ -69,6 +69,7 @@ def load_normalized_inputs(entry_dirs: list[str]) -> dict:
 def train_baseline(
     input_data: dict,
     checkpoint_dir: str,
+    run_name: str = "default",
     hidden_dim: int = 64,
     num_epochs: int = 200,
     learning_rate: float = 1e-3,
@@ -118,7 +119,7 @@ def train_baseline(
     
     # Build metadata
     metadata = {
-        "run_name": os.path.basename(os.path.dirname(checkpoint_dir)),
+        "run_name": run_name,
         "checkpoint_path": ckpt_path,
         "input_entries": input_data["entry_ids"],
         "num_samples": num_samples,

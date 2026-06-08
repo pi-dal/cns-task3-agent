@@ -9,7 +9,7 @@ set -euo pipefail
 
 INPUT_DIR="${INPUT_DIR:-/saisdata}"
 OUTPUT_DIR="${OUTPUT_DIR:-/saisresult}"
-RESULT_ZIP="${OUTPUT_DIR}/result.zip"
+RESULT_ZIP="${OUTPUT_DIR}/output.zip"
 
 # Determine repo root: prefer /app (container), fallback to script dir (local dev)
 if [ -d "/app" ]; then

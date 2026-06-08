@@ -6,6 +6,10 @@ import zipfile
 from pathlib import Path
 
 
+# Competition contract: output file must be named output.zip
+OUTPUT_ZIP_NAME = "output.zip"
+
+
 def resolve_input_dir(custom_path: str | None = None) -> str:
     """Resolve input directory from argument or default /saisdata."""
     if custom_path:
@@ -32,13 +36,13 @@ def pack_result(output_dir: str, result_zip: str | None = None) -> str:
     
     Args:
         output_dir: Directory whose contents to pack.
-        result_zip: Target zip path (default: output_dir/result.zip).
+        result_zip: Target zip path (default: output_dir/output.zip per competition contract).
     
     Returns:
         Path to the created zip archive.
     """
     if result_zip is None:
-        result_zip = os.path.join(output_dir, "result.zip")
+        result_zip = os.path.join(output_dir, OUTPUT_ZIP_NAME)
     
     with zipfile.ZipFile(result_zip, "w", zipfile.ZIP_DEFLATED) as zf:
         for root, dirs, files in os.walk(output_dir):

@@ -60,7 +60,7 @@ def main():
     print(f"[task3-agent] Result: {output_dir}/runs/{cfg.run_name}/result/README.md")
 
     # Pack final result
-    result_zip = pack_result(output_dir, f"{output_dir}/result.zip")
+    result_zip = pack_result(output_dir, f"{output_dir}/output.zip")
     print(f"[task3-agent] Result zip: {result_zip}")
 
 

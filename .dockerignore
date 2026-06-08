@@ -1,0 +1,31 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python / PDM
+__pycache__
+*.pyc
+*.pyo
+.pdm-build
+.pytest_cache
+.ruff_cache
+.venv
+*.egg-info
+
+# IDE
+.idea
+.vscode
+
+# OS
+.DS_Store
+
+# Dev/test files (not needed in prod image)
+tests/
+autoresearch.ideas.md
+autoresearch.jsonl
+docs/
+
+# Docker
+Dockerfile
+.dockerignore

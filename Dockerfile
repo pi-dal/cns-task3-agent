@@ -1,4 +1,4 @@
-FROM nvidia/cuda:12.4.0-runtime-ubuntu22.04 AS base
+FROM nvidia/cuda:12.4.0-runtime-ubuntu22.04
 
 # Base system packages
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -9,22 +9,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     zip \
     && rm -rf /var/lib/apt/lists/*
 
-# Install torch with CUDA support — skip bundled NVIDIA libs (provided by base image)
-# The --find-links pre-resolves all dependencies so pip doesn't re-resolve
+# Install torch with CUDA 12.4 support + pdm in one layer
 RUN pip3 install --no-cache-dir torch==2.6.0 --index-url https://download.pytorch.org/whl/cu124 \
     && pip3 install --no-cache-dir pdm
 
 WORKDIR /app
 
+# Copy dependency manifests
 COPY pyproject.toml pdm.lock run.sh ./
+
+# Install prod deps (torch already in system site-packages, pdm will reuse it)
+RUN pdm install --prod --frozen-lockfile
+
+# Copy source code (changes most often → keep last for layer cache)
 COPY configs/ ./configs/
 COPY src/ ./src/
-COPY tests/ ./tests/
 
-# Install only prod deps
-RUN pdm install --prod --no-lock
-
-# Clean pdm cache and pip cache to reduce image size
+# Clean up caches
 RUN rm -rf /root/.cache /tmp/* /app/.venv/src
 
 ENV PYTHONPATH=/app
